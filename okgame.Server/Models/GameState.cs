@@ -9,17 +9,17 @@ namespace okgame.Server.Models
         public int MinY { get; set; }
         public int MaxY { get; set; }
 
-        public ICollection<PlayedTile> PlayedTiles { get; }
+        public ICollection<IPlayedTile> PlayedTiles { get; }
 
-        public Player? Winner { get; set; }
+        public int? Winner { get; set; }
 
-        public Player Turn { get; set; }
+        public int Turn { get; set; }
 
-        public GameState(Player startingPlayer)
+        public GameState()
         {
-            PlayedTiles = new List<PlayedTile>();
+            PlayedTiles = new List<IPlayedTile>();
             Winner = null;
-            Turn = startingPlayer;
+            Turn = 0;
             MinX = MaxY = MinY = MaxY = 0;
         }
     }

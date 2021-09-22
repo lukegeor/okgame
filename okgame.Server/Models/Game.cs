@@ -1,31 +1,33 @@
 using System.Collections.Generic;
 using System.Linq;
 using okgame.Server.Exceptions;
-using System;
 using Microsoft.Extensions.Logging;
 
 namespace okgame.Server.Models
 {
+
     public class Game : IGame
     {
         private const int TilesInARowToWin = 5;
+        private readonly IWinChecker _winChecker;
 
-        public IEnumerable<Player> Players { get; }
+        public ICollection<Player> Players { get; }
         public GameState GameState { get; set; }
 
         private readonly ILogger _logger;
 
-        public Game(IEnumerable<Player> players, ILogger<Game> logger)
+        public Game(ICollection<Player> players, IWinChecker winChecker, ILogger<Game> logger)
         {
             Players = players;
             _logger = logger;
-            GameState = new GameState(Players.First());
+            _winChecker = winChecker;
+            GameState = new GameState();
         }
 
         public void AddTile(Player player, Coordinate coordinate)
         {
             CheckGameNotFinished();
-            CheckRightPlayersTurn(player);
+            CheckRightPlayersTurn(player.PlayOrder);
             CheckAtLeastOneTileLeft(player);
 
             // First move of the game?
@@ -43,17 +45,17 @@ namespace okgame.Server.Models
 
             // Placement is legal
             player.TilesLeft--;
-            GameState.PlayedTiles.Add(new PlayedTile(coordinate, player));
+            GameState.PlayedTiles.Add(new PlayedTile(coordinate, player.PlayOrder));
 
             ResetMinMax();
             IncrementPlayer();
         }
 
-        public void MoveTile(PlayedTile playedTile, Coordinate newCoordinate)
+        public void MoveTile(Player player, IPlayedTile playedTile, Coordinate newCoordinate)
         {
             CheckGameNotFinished();
-            CheckRightPlayersTurn(playedTile.Player);
-            CheckNoTilesLeft(playedTile);
+            CheckRightPlayersTurn(playedTile.PlayerPlayOrder);
+            CheckNoTilesLeft(player);
             CheckMoveIsntToSameSpace(playedTile, newCoordinate);
             CheckSpaceIsntOccupied(newCoordinate);
             CheckLegalPlacement(newCoordinate);
@@ -65,196 +67,12 @@ namespace okgame.Server.Models
             IncrementPlayer();
         }
 
-        public Player? CheckForWinner()
+        private void IncrementPlayer()
         {
-            var directionLambdasList = new[]
-            {
-                // Vertical
-                new
-                {
-                    Description = "Vertical",
-                    MajorVar = "Y",
-                    MinorVar = "X",
-                    MinMajor = GameState.MinY,
-                    MaxMajor = GameState.MaxY,
-                    MinMinor = GameState.MinX,
-                    MaxMinor = GameState.MaxX,
-                    GetMajor = (Func<PlayedTile, int>) (pt => pt.Coordinate.Y),
-                    GetMinor = (Func<PlayedTile, int>) (pt => pt.Coordinate.X),
-                    AdjustMajorForDiagonal = (Func<int, int, int>) ((originalMinor, diagonalOffset) => originalMinor)
-                },
-                // Horizontal
-                new
-                {
-                    Description = "Horizontal",
-                    MajorVar = "X",
-                    MinorVar = "Y",
-                    MinMajor = GameState.MinX,
-                    MaxMajor = GameState.MaxX,
-                    MinMinor = GameState.MinY,
-                    MaxMinor = GameState.MaxY,
-                    GetMajor = (Func<PlayedTile, int>) (pt => pt.Coordinate.X),
-                    GetMinor = (Func<PlayedTile, int>) (pt => pt.Coordinate.Y),
-                    AdjustMajorForDiagonal = (Func<int, int, int>) ((originalMinor, diagonalOffset) => originalMinor)
-                },
-                // Diagonal
-                new
-                {
-                    Description = "Diagonal down/right",
-                    MajorVar = "Y",
-                    MinorVar = "X",
-                    MinMajor = GameState.MinY - (GameState.MaxX - GameState.MinX),
-                    MaxMajor = GameState.MaxY,
-                    MinMinor = GameState.MinX,
-                    MaxMinor = GameState.MaxX,
-                    GetMajor = (Func<PlayedTile, int>) (pt => pt.Coordinate.Y),
-                    GetMinor = (Func<PlayedTile, int>) (pt => pt.Coordinate.X),
-                    AdjustMajorForDiagonal = (Func<int, int, int>) ((originalMinor, diagonalOffset) => originalMinor + diagonalOffset)
-                },
-                // Diagonal
-                new
-                {
-                    Description = "Diagonal down/left",
-                    MajorVar = "Y",
-                    MinorVar = "X",
-                    MinMajor = GameState.MinY,
-                    MaxMajor = GameState.MaxY + (GameState.MaxX - GameState.MinX),
-                    MinMinor = GameState.MinX,
-                    MaxMinor = GameState.MaxX,
-                    GetMajor = (Func<PlayedTile, int>) (pt => pt.Coordinate.Y),
-                    GetMinor = (Func<PlayedTile, int>) (pt => pt.Coordinate.X),
-                    AdjustMajorForDiagonal = (Func<int, int, int>) ((originalMinor, diagonalOffset) => originalMinor - diagonalOffset)
-                },
-            };
-            foreach (var directionLambdas in directionLambdasList)
-            {
-                _logger.LogDebug($"---- {directionLambdas.Description} ----");
-                Player? playerTest;
-                int tilesInARow = 0;
-                for (int major = directionLambdas.MinMajor; major <= directionLambdas.MaxMajor; major++)
-                {
-                    _logger.LogDebug($"**** Major {directionLambdas.MajorVar} {major}");
-                    playerTest = null;
-                    tilesInARow = 0;
-                    for (int minor = directionLambdas.MinMinor, i = 0; minor <= directionLambdas.MaxMinor; minor++, i++)
-                    {
-                        var adjustedMajor = directionLambdas.AdjustMajorForDiagonal(major, i);
-                        _logger.LogDebug($"  ** Minor {directionLambdas.MinorVar} {minor}");
-                        _logger.LogDebug($"  ** Tile At {directionLambdas.MajorVar} {adjustedMajor}, {directionLambdas.MinorVar} {minor}");
-                        PlayedTile? currentPlayedTile = GameState.PlayedTiles.SingleOrDefault(pt => directionLambdas.GetMinor(pt) == minor && directionLambdas.GetMajor(pt) == adjustedMajor);
-                        _logger.LogDebug($"     Tile owned by {currentPlayedTile?.Player.ToString() ?? "(none)"}");
-                        if (currentPlayedTile == null)
-                        {
-                            playerTest = null;
-                            tilesInARow = 0;
-                        }
-                        else
-                        {
-                            if (currentPlayedTile.Player == playerTest)
-                            {
-                                tilesInARow++;
-                            }
-                            else
-                            {
-                                playerTest = currentPlayedTile.Player;
-                                tilesInARow = 1;
-                            }
-                        }
-                        _logger.LogDebug($"      playerTest = {playerTest?.ToString() ?? "(none)"}, tilesInARow = {tilesInARow}");
-
-                        if (tilesInARow >= TilesInARowToWin)
-                        {
-                            GameState.Winner = playerTest!;
-                            return playerTest!;
-                        }
-                    }
-                }
-            }
-
-            return null;
+            GameState.Turn = (GameState.Turn + 1) % Players.Count;
         }
 
-        public IEnumerable<Coordinate>? CheckForWinner2(IPlayedTile playedTile)
-        {
-            var directions = new (Func<Coordinate, Coordinate> NextCoordinate, Func<Coordinate, Coordinate> PreviousCoordinate)[]
-            {
-                // |
-                (
-                    coordinate => new Coordinate(coordinate.X + 1, coordinate.Y),
-                    coordinate => new Coordinate(coordinate.X - 1, coordinate.Y)
-                ),
-                // --
-                (
-                    coordinate => new Coordinate(coordinate.X, coordinate.Y + 1),
-                    coordinate => new Coordinate(coordinate.X, coordinate.Y - 1)
-                ),
-                // \
-                (
-                    coordinate => new Coordinate(coordinate.X + 1, coordinate.Y + 1),
-                    coordinate => new Coordinate(coordinate.X - 1, coordinate.Y - 1)
-                ),
-                // /
-                (
-                    coordinate => new Coordinate(coordinate.X + 1, coordinate.Y - 1),
-                    coordinate => new Coordinate(coordinate.X - 1, coordinate.Y + 1)
-                ),
-            };
-
-            var allWinningTiles = new HashSet<Coordinate>();
-            foreach (var direction in directions)
-            {
-                var thisDirectionWinningTiles = new HashSet<Coordinate>();
-                thisDirectionWinningTiles.Add(playedTile.Coordinate);
-
-                var currentCoordinate = playedTile.Coordinate;
-                while (currentCoordinate != null)
-                {
-                    currentCoordinate = direction.NextCoordinate(currentCoordinate);
-                    if (GameState.PlayedTiles.Any(checkTile => checkTile.Coordinate.Equals(currentCoordinate) && checkTile.Player.PlayOrder == playedTile.Player.PlayOrder))
-                    {
-                        thisDirectionWinningTiles.Add(currentCoordinate);
-                    }
-                    else
-                    {
-                        currentCoordinate = null;
-                    }
-                }
-                currentCoordinate = playedTile.Coordinate;
-                while (currentCoordinate != null)
-                {
-                    currentCoordinate = direction.PreviousCoordinate(currentCoordinate);
-                    if (GameState.PlayedTiles.Any(checkTile => checkTile.Coordinate.Equals(currentCoordinate) && checkTile.Player.PlayOrder == playedTile.Player.PlayOrder))
-                    {
-                        thisDirectionWinningTiles.Add(currentCoordinate);
-                    }
-                    else
-                    {
-                        currentCoordinate = null;
-                    }
-                }
-
-                if (thisDirectionWinningTiles.Count >= TilesInARowToWin)
-                {
-                    allWinningTiles.UnionWith(thisDirectionWinningTiles);
-                }
-            }
-
-            return allWinningTiles.Any() ? allWinningTiles : null;
-        }
-
-        private Player IncrementPlayer()
-        {
-            var currentPlayerOrder = GameState.Turn.PlayOrder;
-            var nextPlayer = Players.OrderBy(p => p.PlayOrder).FirstOrDefault(p => p.PlayOrder > currentPlayerOrder);
-            if (nextPlayer == null)
-            {
-                nextPlayer = Players.OrderBy(p => p.PlayOrder).First();
-            }
-            GameState.Turn = nextPlayer!;
-            return nextPlayer;
-        }
-
-        private static void CheckMoveIsntToSameSpace(PlayedTile playedTile, Coordinate coordinate)
+        private static void CheckMoveIsntToSameSpace(IPlayedTile playedTile, Coordinate coordinate)
         {
             if (playedTile.Coordinate.X == coordinate.X && playedTile.Coordinate.Y == coordinate.Y)
             {
@@ -262,9 +80,9 @@ namespace okgame.Server.Models
             }
         }
 
-        private static void CheckNoTilesLeft(PlayedTile playedTile)
+        private static void CheckNoTilesLeft(Player player)
         {
-            if (playedTile.Player.TilesLeft > 0)
+            if (player.TilesLeft > 0)
             {
                 throw new UnplayedTilesLeftException();
             }
@@ -306,9 +124,9 @@ namespace okgame.Server.Models
             }
         }
 
-        private void CheckRightPlayersTurn(Player player)
+        private void CheckRightPlayersTurn(int playerOrder)
         {
-            if (player != GameState.Turn)
+            if (playerOrder != GameState.Turn)
             {
                 throw new WrongPlayersTurnException();
             }

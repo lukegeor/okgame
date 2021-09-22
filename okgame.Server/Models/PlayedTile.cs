@@ -4,12 +4,12 @@ namespace okgame.Server.Models
     {
         public Coordinate Coordinate { get; private set; }
 
-        public Player Player { get; }
+        public int PlayerPlayOrder { get; }
 
-        public PlayedTile(Coordinate coordinate, Player player)
+        public PlayedTile(Coordinate coordinate, int playerPlayOrder)
         {
             Coordinate = coordinate;
-            Player = player;
+            PlayerPlayOrder = playerPlayOrder;
         }
 
         public void MoveCoordinate(Coordinate newCoordinate)
@@ -17,6 +17,6 @@ namespace okgame.Server.Models
             Coordinate = newCoordinate;
         }
 
-        public override string ToString() => $"{Player.PlayOrder} {Coordinate}";
+        public override string ToString() => $"{PlayerPlayOrder} {Coordinate}";
     }
 }

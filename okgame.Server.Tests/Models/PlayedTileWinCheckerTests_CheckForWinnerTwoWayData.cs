@@ -1,10 +1,9 @@
 using System.Collections.Generic;
 using System.Collections;
-using okgame.Server.Models;
 
-namespace okgame.Server.Tests
+namespace okgame.Server.Models.Tests
 {
-    public class ModelsTests_CheckForWinner2TwoWayData : IEnumerable<object[]>
+    public class PlayedTileWinCheckerTests_CheckForWinnerTwoWayData : IEnumerable<object[]>
     {
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 
