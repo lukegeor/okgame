@@ -1,20 +1,20 @@
 namespace okgame.Server.Models
 {
-    public class PlayedTile
+    public class PlayedTile : IPlayedTile
     {
-        // Vertical
-        public int X { get; set; }
+        public Coordinate Coordinate { get; private set; }
 
-        // Horizontal
-        public int Y { get; set; }
+        public Player Player { get; }
 
-        public Player Player { get; set; }
-
-        public PlayedTile(int x, int y, Player player)
+        public PlayedTile(Coordinate coordinate, Player player)
         {
-            X = x;
-            Y = y;
+            Coordinate = coordinate;
             Player = player;
+        }
+
+        public void MoveCoordinate(Coordinate newCoordinate)
+        {
+            Coordinate = newCoordinate;
         }
     }
 }

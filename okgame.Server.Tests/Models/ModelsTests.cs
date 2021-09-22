@@ -1,9 +1,13 @@
-using System.Threading.Tasks.Dataflow;
-using System.Linq;
-using Xunit;
 using okgame.Server.Models;
+
+using AutoFixture;
+using System.Linq;
 using System.Collections.Generic;
-using System;
+using Xunit;
+using AutoFixture.AutoMoq;
+using Xunit.Abstractions;
+using Microsoft.Extensions.Logging;
+using okgame.Server.Tests.TestUtils;
 
 namespace okgame.Server.Tests
 {
@@ -11,13 +15,17 @@ namespace okgame.Server.Tests
     {
         private const int NumPlayers = 4;
 
+        private readonly IFixture _fixture;
         private readonly Game _game;
-        private readonly List<User> _users;
+        private readonly IEnumerable<Player> _players;
 
-        public GameTests()
+        public GameTests(ITestOutputHelper outputHelper)
         {
-            _users = Enumerable.Range(0, 4).Select(i => new User()).ToList();
-            _game = new Game(_users);
+            _fixture = new Fixture().Customize(new AutoMoqCustomization());
+            _players = Enumerable.Range(0, NumPlayers).Select(i => new User()).Select((u, i) => new Player(u, i));
+            _fixture.Inject<IEnumerable<Player>>(_players);
+            _fixture.Inject<ILogger<Game>>(new XunitLogger<Game>(outputHelper));
+            _game = _fixture.Create<Game>();
         }
 
         #region CheckForWinner
@@ -32,7 +40,7 @@ namespace okgame.Server.Tests
                 {
                     if (board[x, y] >= 0)
                     {
-                        _game.GameState.PlayedTiles.Add(new PlayedTile(x, y, players[board[x, y]]));
+                        _game.GameState.PlayedTiles.Add(new PlayedTile(new Coordinate(x, y), players[board[x, y]]));
                     }
                 }
             }
