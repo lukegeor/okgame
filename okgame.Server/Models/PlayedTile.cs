@@ -16,5 +16,7 @@ namespace okgame.Server.Models
         {
             Coordinate = newCoordinate;
         }
+
+        public override string ToString() => $"{Player.PlayOrder} {Coordinate}";
     }
 }

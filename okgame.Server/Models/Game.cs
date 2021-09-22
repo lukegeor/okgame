@@ -174,6 +174,74 @@ namespace okgame.Server.Models
             return null;
         }
 
+        public IEnumerable<Coordinate>? CheckForWinner2(IPlayedTile playedTile)
+        {
+            var directions = new (Func<Coordinate, Coordinate> NextCoordinate, Func<Coordinate, Coordinate> PreviousCoordinate)[]
+            {
+                // |
+                (
+                    coordinate => new Coordinate(coordinate.X + 1, coordinate.Y),
+                    coordinate => new Coordinate(coordinate.X - 1, coordinate.Y)
+                ),
+                // --
+                (
+                    coordinate => new Coordinate(coordinate.X, coordinate.Y + 1),
+                    coordinate => new Coordinate(coordinate.X, coordinate.Y - 1)
+                ),
+                // \
+                (
+                    coordinate => new Coordinate(coordinate.X + 1, coordinate.Y + 1),
+                    coordinate => new Coordinate(coordinate.X - 1, coordinate.Y - 1)
+                ),
+                // /
+                (
+                    coordinate => new Coordinate(coordinate.X + 1, coordinate.Y - 1),
+                    coordinate => new Coordinate(coordinate.X - 1, coordinate.Y + 1)
+                ),
+            };
+
+            var allWinningTiles = new HashSet<Coordinate>();
+            foreach (var direction in directions)
+            {
+                var thisDirectionWinningTiles = new HashSet<Coordinate>();
+                thisDirectionWinningTiles.Add(playedTile.Coordinate);
+
+                var currentCoordinate = playedTile.Coordinate;
+                while (currentCoordinate != null)
+                {
+                    currentCoordinate = direction.NextCoordinate(currentCoordinate);
+                    if (GameState.PlayedTiles.Any(checkTile => checkTile.Coordinate.Equals(currentCoordinate) && checkTile.Player.PlayOrder == playedTile.Player.PlayOrder))
+                    {
+                        thisDirectionWinningTiles.Add(currentCoordinate);
+                    }
+                    else
+                    {
+                        currentCoordinate = null;
+                    }
+                }
+                currentCoordinate = playedTile.Coordinate;
+                while (currentCoordinate != null)
+                {
+                    currentCoordinate = direction.PreviousCoordinate(currentCoordinate);
+                    if (GameState.PlayedTiles.Any(checkTile => checkTile.Coordinate.Equals(currentCoordinate) && checkTile.Player.PlayOrder == playedTile.Player.PlayOrder))
+                    {
+                        thisDirectionWinningTiles.Add(currentCoordinate);
+                    }
+                    else
+                    {
+                        currentCoordinate = null;
+                    }
+                }
+
+                if (thisDirectionWinningTiles.Count >= TilesInARowToWin)
+                {
+                    allWinningTiles.UnionWith(thisDirectionWinningTiles);
+                }
+            }
+
+            return allWinningTiles.Any() ? allWinningTiles : null;
+        }
+
         private Player IncrementPlayer()
         {
             var currentPlayerOrder = GameState.Turn.PlayOrder;

@@ -1,3 +1,5 @@
+using System;
+
 namespace okgame.Server.Models
 {
     public class Coordinate
@@ -13,5 +15,19 @@ namespace okgame.Server.Models
             X = x;
             Y = y;
         }
+
+        public override bool Equals(object? obj)
+        {
+            return obj is Coordinate coordinate &&
+                   X == coordinate.X &&
+                   Y == coordinate.Y;
+        }
+
+        public override int GetHashCode()
+        {
+            return HashCode.Combine(X, Y);
+        }
+
+        public override string ToString() => $"({X},{Y})";
     }
 }
